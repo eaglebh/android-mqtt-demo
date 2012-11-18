@@ -5,7 +5,9 @@ import java.net.URL;
 
 import android.app.Service;
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.IBinder;
+import android.util.Log;
 import android.widget.Toast;
 
 public class EventService extends Service {
@@ -27,15 +29,16 @@ public class EventService extends Service {
 		// stopped, so return sticky.
 		Toast.makeText(this, "Service Started", Toast.LENGTH_LONG).show();
 		try{
-			int result = DownloadFile(new URL("http://www.amazon.com/somefile.pdf"));
-			Toast.makeText(getBaseContext(),
-			  "Downloaded " + result + " bytes",
-			Toast.LENGTH_LONG).show();
+			new DoBackgroundTask().execute(
+					new URL("http://www.amazon.com/f1.pdf")
+					);
 			} catch(MalformedURLException e) {
-			// TODOAuto-generated catch block
-			e.printStackTrace();
+				e.printStackTrace();
 			}
 
+		Intent broadcastIntent = new Intent();
+		broadcastIntent.setAction("FILE_DOWNLOADED_ACTION");
+		getBaseContext().sendBroadcast(broadcastIntent);
 		return START_STICKY;
 	}
 
@@ -48,4 +51,30 @@ public class EventService extends Service {
 		return 100;
 	}
 
+	private class DoBackgroundTask extends AsyncTask<URL, Integer, Long> {
+
+		@Override
+		protected Long doInBackground(URL... urls) {
+			int count = urls.length;
+			long totalBytesDownloaded = 0;
+			for(int i=0; i < count; i++){
+				totalBytesDownloaded += DownloadFile(urls[i]);
+				publishProgress( ((i+1)*100 / count));
+			}
+			return totalBytesDownloaded;
+		}
+
+		@Override
+		protected void onPostExecute(Long result) {
+			Toast.makeText(getBaseContext(), "Downloaded "+ result +"bytes", Toast.LENGTH_LONG).show();
+			stopSelf();
+		}
+
+		@Override
+		protected void onProgressUpdate(Integer... progress) {
+			Log.d("Downloading files", String.valueOf(progress[0]) + "% downloaded");
+			Toast.makeText(getBaseContext(), progress[0]+"% downloaded", Toast.LENGTH_LONG).show();
+		}
+		
+	}
 }
