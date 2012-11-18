@@ -6,15 +6,26 @@ import java.net.URL;
 import android.app.Service;
 import android.content.Intent;
 import android.os.AsyncTask;
+import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
 import android.widget.Toast;
 
 public class EventService extends Service {
+	
+	public URL[] urls;
+	
+	private final IBinder binder = new EventServiceBinder();
+	
+	public class EventServiceBinder extends Binder {
+		public EventService getService() {
+			return EventService.this;
+		}
+	}
 
 	@Override
 	public IBinder onBind(Intent arg0) {
-		return null;
+		return binder;
 	}
 
 	@Override
@@ -28,17 +39,9 @@ public class EventService extends Service {
 		// We want this service to continue running until it is explicitly
 		// stopped, so return sticky.
 		Toast.makeText(this, "Service Started", Toast.LENGTH_LONG).show();
-		try{
-			new DoBackgroundTask().execute(
-					new URL("http://www.amazon.com/f1.pdf")
-					);
-			} catch(MalformedURLException e) {
-				e.printStackTrace();
-			}
-
-		Intent broadcastIntent = new Intent();
-		broadcastIntent.setAction("FILE_DOWNLOADED_ACTION");
-		getBaseContext().sendBroadcast(broadcastIntent);
+		
+		new DoBackgroundTask().execute(urls);
+		
 		return START_STICKY;
 	}
 
@@ -61,6 +64,11 @@ public class EventService extends Service {
 				totalBytesDownloaded += DownloadFile(urls[i]);
 				publishProgress( ((i+1)*100 / count));
 			}
+			
+			Intent broadcastIntent = new Intent();
+			broadcastIntent.setAction("FILE_DOWNLOADED_ACTION");
+			getBaseContext().sendBroadcast(broadcastIntent);
+			
 			return totalBytesDownloaded;
 		}
 
