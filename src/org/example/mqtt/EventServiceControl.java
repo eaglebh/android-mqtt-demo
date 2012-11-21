@@ -40,6 +40,9 @@ public class EventServiceControl extends Activity {
                 case EventService.MSG_SET_VALUE:
                     mCallbackText.setText("Received from service: " + msg.arg1);
                     break;
+                case EventService.MSG_STR_VALUE:
+                    mCallbackText.setText("Received from service: " + msg.obj.toString());
+                    break;    
                 default:
                     super.handleMessage(msg);
             }
@@ -72,7 +75,12 @@ public class EventServiceControl extends Activity {
                         EventService.MSG_REGISTER_CLIENT);
                 msg.replyTo = mMessenger;
                 mService.send(msg);
-                
+                try {
+					Thread.sleep(2000);
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
                 // Give it some value as an example.
                 msg = Message.obtain(null,
                         EventService.MSG_SET_VALUE, this.hashCode(), 0);

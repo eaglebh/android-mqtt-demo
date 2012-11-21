@@ -1,11 +1,19 @@
 package org.example.mqtt;
 
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
+
+import org.fusesource.mqtt.client.Callback;
+import org.fusesource.mqtt.client.FutureConnection;
+import org.fusesource.mqtt.client.MQTT;
+import org.fusesource.mqtt.client.QoS;
+import org.fusesource.mqtt.client.Topic;
 
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.ProgressDialog;
 import android.app.Service;
 import android.content.Intent;
 import android.os.AsyncTask;
@@ -46,6 +54,8 @@ public class EventService extends Service {
      * any registered clients with the new value.
      */
     static final int MSG_SET_VALUE = 3;
+    static final int MSG_STR_VALUE = 4;
+	private static final String TAG = "MQTTClient";
     
     /**
      * Handler of incoming messages from clients.
@@ -53,6 +63,7 @@ public class EventService extends Service {
     class IncomingHandler extends Handler {
         @Override
         public void handleMessage(Message msg) {
+        	Log.d(TAG, "received msg: [" + msg.what + "]");
             switch (msg.what) {
                 case MSG_REGISTER_CLIENT:
                     mClients.add(msg.replyTo);
@@ -61,6 +72,8 @@ public class EventService extends Service {
                     mClients.remove(msg.replyTo);
                     break;
                 case MSG_SET_VALUE:
+                	send();
+                	
                     mValue = msg.arg1;
                     for (int i=mClients.size()-1; i>=0; i--) {
                         try {
@@ -84,6 +97,14 @@ public class EventService extends Service {
      * Target we publish for clients to send messages to IncomingHandler.
      */
     final Messenger mMessenger = new Messenger(new IncomingHandler());
+	private MQTT mqtt;
+	private String sAddress = "tcp://10.183.31.231:1883";
+	private String sUserName = "system";
+	private String sPassword = "manager";
+	private FutureConnection connection;
+	//private ProgressDialog progressDialog;
+	private String sDestination = "jms_mqtt_incoming";
+	protected String sMessage = "Mensagem do validador.";
     
     @Override
     public void onCreate() {
@@ -91,6 +112,8 @@ public class EventService extends Service {
 
         // Display a notification about us starting.
         showNotification();
+        
+        connect();
     }
     
     /**
@@ -117,6 +140,143 @@ public class EventService extends Service {
         notificatinManager.notify(R.string.remote_service_started, notification);
     }
     
+    private void connect()
+	{
+		mqtt = new MQTT();
+		mqtt.setClientId("validador-152");
+
+		try
+		{
+			mqtt.setHost(sAddress);
+			Log.d(TAG, "Address set: " + sAddress);
+		}
+		catch(URISyntaxException urise)
+		{
+			Log.e(TAG, "URISyntaxException connecting to " + sAddress + " - " + urise);
+		}
+		
+		if(sUserName != null && !sUserName.equals(""))
+		{
+			mqtt.setUserName(sUserName);
+			Log.d(TAG, "UserName set: [" + sUserName + "]");
+		}
+		
+		if(sPassword != null && !sPassword.equals(""))
+		{
+			mqtt.setPassword(sPassword);
+			Log.d(TAG, "Password set: [" + sPassword + "]");
+		}
+		
+		connection = mqtt.futureConnection();
+		//progressDialog = ProgressDialog.show(this, "", "Connecting...", true);
+		connection.connect().then(new Callback<Void>(){
+			public void onSuccess(Void value) {
+				//progressDialog.dismiss();
+				Log.d(TAG, "Conectado");
+			}
+			public void onFailure(Throwable e) {
+				toast("Problem connecting to host");
+				Log.e(TAG, "Exception connecting to " + sAddress + " - " + e);
+				//progressDialog.dismiss();
+			}
+		});
+
+	}
+	
+	private void disconnect()
+	{
+		try
+		{
+			if(connection != null && connection.isConnected())
+			{
+				connection.disconnect().then(new Callback<Void>(){
+					public void onSuccess(Void value) {
+						toast("Disconnected");
+					}
+					public void onFailure(Throwable e) {
+						toast("Problem disconnecting");
+						Log.e(TAG, "Exception disconnecting from " + sAddress + " - " + e);
+					}
+				});
+			}
+			else
+			{
+				toast("Not Connected");
+			}
+		}
+		catch(Exception e)
+		{
+			Log.e(TAG, "Exception " + e);
+		}
+	}
+	
+	private void send()
+	{
+		if(connection != null)
+		{
+			// automatically connect if no longer connected
+			if(!connection.isConnected())
+			{
+				Log.d(TAG, "nao conectado");
+				connect();
+			}
+			
+			Topic[] topics = {new Topic(sDestination, QoS.AT_LEAST_ONCE)};
+			connection.subscribe(topics).then(new Callback<byte[]>() {
+				public void onSuccess(byte[] subscription) {
+					
+					Log.d(TAG, "Destination: " + sDestination);
+					Log.d(TAG, "Message: " + sMessage);
+					
+					// publish message
+					connection.publish(sDestination, sMessage.getBytes(), QoS.AT_LEAST_ONCE, false);
+					toast("Message sent");
+					
+					// receive message
+					connection.receive().then(createCallback());
+					
+				}
+
+				private Callback< org.fusesource.mqtt.client.Message> createCallback() {
+					return new Callback< org.fusesource.mqtt.client.Message>() {
+						public void onSuccess( org.fusesource.mqtt.client.Message message) {
+							String receivedMesageTopic = message.getTopic();
+							byte[] payload = message.getPayload();
+							String messagePayLoad = new String(payload);
+							message.ack();
+							
+							Log.d(TAG, "msg: [" + messagePayLoad + "]");
+							for (int i=mClients.size()-1; i>=0; i--) {
+		                        try {
+		                            mClients.get(i).send(Message.obtain(null,
+		                                    MSG_STR_VALUE, messagePayLoad));
+		                        } catch (RemoteException e) {
+		                            // The client is dead.  Remove it from the list;
+		                            // we are going through the list from back to front
+		                            // so this is safe to do inside the loop.
+		                            mClients.remove(i);
+		                        }
+		                    }
+							connection.receive().then(createCallback());
+						}
+						
+						public void onFailure(Throwable e) {
+							Log.e(TAG, "Exception receiving message: " + e);
+						}
+					};
+				}
+				
+				public void onFailure(Throwable e) {
+					Log.e(TAG, "Exception sending message: " + e);
+				}
+			});
+		}
+		else
+		{
+			toast("No connection has been made, please create the connection");
+		}
+	}
+    
 	public URL[] urls;
 	
 	private final IBinder binder = new EventServiceBinder();
@@ -132,7 +292,7 @@ public class EventService extends Service {
      * for sending messages to the service.
      */
 	@Override
-	public IBinder onBind(Intent arg0) {
+	public IBinder onBind(Intent arg0) {		
 		return mMessenger.getBinder();
 	}
 
@@ -140,7 +300,7 @@ public class EventService extends Service {
 	public void onDestroy() {
 		super.onDestroy();
 		Toast.makeText(this, "Service Destroyed", Toast.LENGTH_LONG).show();
-		
+		disconnect();
 		// Cancel the persistent notification.
         notificatinManager.cancel(R.string.remote_service_started);
 
@@ -198,5 +358,11 @@ public class EventService extends Service {
 			Toast.makeText(getBaseContext(), progress[0]+"% downloaded", Toast.LENGTH_LONG).show();
 		}
 		
+	}
+	
+	private void toast(String message)
+	{
+		//Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+		Log.d("toast {", message +"}");
 	}
 }
