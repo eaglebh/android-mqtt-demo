@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Android MQTT Test Client</string>
+    <string name="address">Address:</string>
+    <string name="user_name">User Name:</string>
+    <string name="password">Password:</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="destination">Destination:</string>
+    <string name="message">Message:</string>
+    <string name="send">Send</string>
+    <string name="received">Received:</string>
+    <string name="remote_service_started">Events Service started</string>
+    <string name="remote_service_stopped">Events Service stopped</string>
+    <string name="remote_service_label">Events Service</string>
+    <string name="remote_service_connected">Events Service connected</string>
+    <string name="remote_service_disconnected">Events Service disconnected</string>
 </resources>
