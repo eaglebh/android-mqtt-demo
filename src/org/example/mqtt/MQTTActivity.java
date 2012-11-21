@@ -13,6 +13,7 @@ import org.example.mqtt.R;
 
 import android.app.Activity;
 import android.app.ProgressDialog;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.util.Log;
@@ -87,6 +88,14 @@ public class MQTTActivity extends Activity implements OnClickListener{
     	
     	sendButton = (Button)findViewById(R.id.sendButton);
     	sendButton.setOnClickListener(this);
+    	
+    	Button btnStart = (Button) findViewById(R.id.btnStartService);
+    	btnStart.setOnClickListener(new View.OnClickListener() {
+    		public void onClick(View v) {
+    			startActivity(new Intent("com.sistemasnp.android.mqtt.EVENT_CONTROL"));
+    		}
+    	});
+
     }
 
 	public void onClick(View v) {
@@ -246,21 +255,27 @@ public class MQTTActivity extends Activity implements OnClickListener{
 					toast("Message sent");
 					
 					// receive message
-					connection.receive().then(onui(new Callback<Message>() {
+					connection.receive().then(onui(createCallback()));
+					
+				}
+
+				private Callback<Message> createCallback() {
+					return new Callback<Message>() {
 						public void onSuccess(Message message) {
 							String receivedMesageTopic = message.getTopic();
 							byte[] payload = message.getPayload();
 							String messagePayLoad = new String(payload);
 							message.ack();
-							connection.unsubscribe(new String[]{sDestination});
+							//connection.unsubscribe(new String[]{sDestination});
 							receiveET.setText(receivedMesageTopic + ":" + messagePayLoad);
+							
+							connection.receive().then(onui(createCallback()));
 						}
 						
 						public void onFailure(Throwable e) {
 							Log.e(TAG, "Exception receiving message: " + e);
 						}
-					}));
-					
+					};
 				}
 				
 				public void onFailure(Throwable e) {
