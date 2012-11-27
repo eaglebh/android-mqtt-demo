@@ -59,7 +59,8 @@ public class EventService extends Service {
    */
   static final int MSG_SET_VALUE = 3;
   static final int MSG_STR_VALUE = 4;
-  static final int MSG_SET_SERVER = 5;
+  static final int MSG_GET_SERVER = 5;
+  static final int MSG_SET_SERVER = 6;
   private static final String TAG = "MQTTClient";
 
   /**
@@ -82,8 +83,7 @@ public class EventService extends Service {
         mValue = msg.arg1;
         for (int i = mClients.size() - 1; i >= 0; i--) {
           try {
-            mClients.get(i)
-                .send(Message.obtain(null, MSG_SET_VALUE, mValue, 0));
+            mClients.get(i).send(Message.obtain(null, MSG_SET_VALUE, mValue, 0));
           } catch (RemoteException e) {
             // The client is dead. Remove it from the list;
             // we are going through the list from back to front
@@ -92,7 +92,8 @@ public class EventService extends Service {
           }
         }
         break;
-      case MSG_SET_SERVER:
+      case MSG_SET_SERVER: {
+        Log.d("ES", "received from client " + msg.obj.toString());
         List<String> values = (List<String>) msg.obj;
         sAddress = values.get(0);
         sUserName = values.get(1);
@@ -100,6 +101,20 @@ public class EventService extends Service {
         disconnect();
         connect();
         break;
+      }
+      case MSG_GET_SERVER: {
+        Log.d("ES", "received MSG_GET_SERVER");
+        List<String> retValues = new ArrayList<String>();
+        retValues.add(sAddress);
+        retValues.add(sUserName);
+        retValues.add(sPassword);
+        try {
+          msg.replyTo.send(Message.obtain(null, MSG_SET_SERVER, retValues));
+        } catch (RemoteException e) {
+          e.printStackTrace();
+        }
+        break;
+      }
       default:
         super.handleMessage(msg);
       }
@@ -111,9 +126,9 @@ public class EventService extends Service {
    */
   final Messenger mMessenger = new Messenger(new IncomingHandler());
   private MQTT mqtt;
-  private String sAddress = "tcp://10.183.31.231:1883";
-  private String sUserName = "system";
-  private String sPassword = "manager";
+  private String sAddress = "tcp://10.183.31.6:61613";
+  private String sUserName = "admin";
+  private String sPassword = "password";
   private FutureConnection connection;
   // private ProgressDialog progressDialog;
   private String sDestination = "jms_mqtt_incoming";
@@ -138,17 +153,14 @@ public class EventService extends Service {
     CharSequence text = getText(R.string.remote_service_started);
 
     // Set the icon, scrolling text and timestamp
-    Notification notification = new Notification(R.drawable.stat_sample, text,
-        System.currentTimeMillis());
+    Notification notification = new Notification(R.drawable.stat_sample, text, System.currentTimeMillis());
 
     // The PendingIntent to launch our activity if the user selects this
     // notification
-    PendingIntent contentIntent = PendingIntent.getActivity(this, 0,
-        new Intent(), 0);
+    PendingIntent contentIntent = PendingIntent.getActivity(this, 0, new Intent(), 0);
 
     // Set the info for the views that show in the notification panel.
-    notification.setLatestEventInfo(this,
-        getText(R.string.remote_service_label), text, contentIntent);
+    notification.setLatestEventInfo(this, getText(R.string.remote_service_label), text, contentIntent);
 
     // Send the notification.
     // We use a string id because it is a unique number. We use it later to
@@ -157,8 +169,7 @@ public class EventService extends Service {
   }
 
   private void connect() {
-    ConnectivityManager cm = (ConnectivityManager) getBaseContext()
-        .getSystemService(Context.CONNECTIVITY_SERVICE);
+    ConnectivityManager cm = (ConnectivityManager) getBaseContext().getSystemService(Context.CONNECTIVITY_SERVICE);
 
     NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
     boolean isConnected = activeNetwork.isConnectedOrConnecting();
@@ -166,8 +177,10 @@ public class EventService extends Service {
     if (!isConnected) {
       toast("Network connection unavailable");
       return;
+    } else {
+      toast("Network OK");      
     }
-    
+
     mqtt = new MQTT();
     mqtt.setClientId("validador-152");
 
@@ -242,8 +255,7 @@ public class EventService extends Service {
           Log.d(TAG, "Message: " + sMessage);
 
           // publish message
-          connection.publish(sDestination, sMessage.getBytes(),
-              QoS.AT_LEAST_ONCE, false);
+          connection.publish(sDestination, sMessage.getBytes(), QoS.AT_LEAST_ONCE, false);
           toast("Message sent");
 
           // receive message
@@ -262,8 +274,7 @@ public class EventService extends Service {
               Log.d(TAG, "msg: [" + messagePayLoad + "]");
               for (int i = mClients.size() - 1; i >= 0; i--) {
                 try {
-                  mClients.get(i).send(
-                      Message.obtain(null, MSG_STR_VALUE, messagePayLoad));
+                  mClients.get(i).send(Message.obtain(null, MSG_STR_VALUE, messagePayLoad));
                 } catch (RemoteException e) {
                   // The client is dead. Remove it from the list;
                   // we are going through the list from back to front
@@ -317,8 +328,7 @@ public class EventService extends Service {
     notificatinManager.cancel(R.string.remote_service_started);
 
     // Tell the user we stopped.
-    Toast.makeText(this, R.string.remote_service_stopped, Toast.LENGTH_SHORT)
-        .show();
+    Toast.makeText(this, R.string.remote_service_stopped, Toast.LENGTH_SHORT).show();
   }
 
   @Override
@@ -361,16 +371,14 @@ public class EventService extends Service {
 
     @Override
     protected void onPostExecute(Long result) {
-      Toast.makeText(getBaseContext(), "Downloaded " + result + "bytes",
-          Toast.LENGTH_LONG).show();
+      Toast.makeText(getBaseContext(), "Downloaded " + result + "bytes", Toast.LENGTH_LONG).show();
       stopSelf();
     }
 
     @Override
     protected void onProgressUpdate(Integer... progress) {
       Log.d("Downloading files", String.valueOf(progress[0]) + "% downloaded");
-      Toast.makeText(getBaseContext(), progress[0] + "% downloaded",
-          Toast.LENGTH_LONG).show();
+      Toast.makeText(getBaseContext(), progress[0] + "% downloaded", Toast.LENGTH_LONG).show();
     }
 
   }

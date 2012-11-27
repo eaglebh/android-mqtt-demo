@@ -12,12 +12,14 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.location.Address;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
+import android.text.InputType;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -38,18 +40,34 @@ public class EventServiceControl extends Activity {
   /** Some text view we are using to show state information. */
   TextView mCallbackText;
 
+  EditText addressInput;      
+  EditText userInput;
+  EditText passwdInput;
+  
   /**
    * Handler of incoming messages from service.
    */
   class IncomingHandler extends Handler {
     @Override
     public void handleMessage(Message msg) {
+      Log.d("ESC", "received "+msg.what);
       switch (msg.what) {
       case EventService.MSG_SET_VALUE:
         mCallbackText.setText("Received from service: " + msg.arg1);
         break;
       case EventService.MSG_STR_VALUE:
         mCallbackText.setText("Received from service: " + msg.obj.toString());
+        break;
+      case EventService.MSG_SET_SERVER:
+        Log.d("ESC", "received from service " + msg.obj.toString());
+        mCallbackText.setText("Received from service: " + msg.obj.toString());
+        List<String> values = (List<String>) msg.obj;
+        String sAddress = values.get(0);
+        addressInput.setText(sAddress);
+        String sUserName = values.get(1);
+        userInput.setText(sUserName);
+        String sPassword = values.get(2);
+        passwdInput.setText(sPassword);
         break;
       default:
         super.handleMessage(msg);
@@ -86,6 +104,9 @@ public class EventServiceControl extends Activity {
         } catch (InterruptedException e) {
           e.printStackTrace();
         }
+        msg = Message.obtain(null, EventService.MSG_GET_SERVER);
+        msg.replyTo = mMessenger;
+        mService.send(msg);
         // Give it some value as an example.
         msg = Message.obtain(null, EventService.MSG_SET_VALUE, this.hashCode(),
             0);
@@ -118,6 +139,9 @@ public class EventServiceControl extends Activity {
     // Establish a connection with the service. We use an explicit
     // class name because there is no reason to be able to let other
     // applications replace our component.
+    if(mIsBound){
+      return;
+    }
     bindService(new Intent(this, EventService.class), mConnection,
         Context.BIND_AUTO_CREATE);
     mIsBound = true;
@@ -151,6 +175,13 @@ public class EventServiceControl extends Activity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.event_control);
+    
+    addressInput = new EditText(this);
+    addressInput.setInputType(InputType.TYPE_TEXT_VARIATION_NORMAL);
+    userInput = new EditText(this);
+    userInput.setInputType(InputType.TYPE_TEXT_VARIATION_NORMAL);
+    passwdInput = new EditText(this);
+    passwdInput.setInputType(InputType.TYPE_TEXT_VARIATION_NORMAL);
 
     Button btnStart = (Button) findViewById(R.id.btnStartService);
     btnStart.setOnClickListener(new View.OnClickListener() {
@@ -190,14 +221,12 @@ public class EventServiceControl extends Activity {
 
       // Set an EditText view to get user input
       final LinearLayout dialogLayout = new LinearLayout(getBaseContext());
-      final EditText addressInput = new EditText(this);
-      final EditText userInput = new EditText(this);
-      final EditText passwdInput = new EditText(this);
+      dialogLayout.setOrientation(LinearLayout.VERTICAL);
+
       dialogLayout.addView(addressInput);
       dialogLayout.addView(userInput);
       dialogLayout.addView(passwdInput);
       alert.setView(dialogLayout);
-      
 
       alert.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
         public void onClick(DialogInterface dialog, int whichButton) {
@@ -206,6 +235,9 @@ public class EventServiceControl extends Activity {
           String passwdValue = passwdInput.getText().toString().trim();
           Log.d("ESC", "sv="+serverValue + "uv="+userValue + "pv="+passwdValue);
           List<String> values = new ArrayList<String>();
+          values.add(serverValue);
+          values.add(userValue);
+          values.add(passwdValue);
           Message msg = Message.obtain(null, EventService.MSG_SET_SERVER, values);
           try {
             mService.send(msg);
